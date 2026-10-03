@@ -1,0 +1,6 @@
+{
+  "name": "MoneyMic",
+  "description": "MoneyMic Autonomous Financial Agent Simulator: L3 bounded autonomy financial agent powered by Gemini 3.8 Flash Interactions API.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

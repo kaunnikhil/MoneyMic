@@ -1,0 +1,34 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>MoneyMic Agent Simulator</title>
+    <meta name="description" content="MoneyMic Autonomous Financial Agent Simulator: L3 bounded autonomy financial agent powered by Gemini 3.8 Flash Interactions API." />
+    <meta property="og:title" content="MoneyMic Agent Simulator" />
+    <meta property="og:description" content="MoneyMic Autonomous Financial Agent Simulator: L3 bounded autonomy financial agent powered by Gemini 3.8 Flash Interactions API." />
+    <meta property="og:type" content="website" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <script>
+      // Suppress noisy third-party wallet browser extension errors (e.g. MetaMask injection)
+      window.addEventListener('error', function(event) {
+        if (event.message && (event.message.includes('MetaMask') || event.message.includes('ethereum'))) {
+          event.preventDefault();
+          event.stopPropagation();
+        }
+      }, true);
+      window.addEventListener('unhandledrejection', function(event) {
+        var reason = event.reason ? String(event.reason) : '';
+        if (reason.includes('MetaMask') || reason.includes('ethereum')) {
+          event.preventDefault();
+          event.stopPropagation();
+        }
+      });
+    </script>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>
+
