@@ -40,6 +40,23 @@ export const MONEYMIC_TOOLS = [
           description:
             'Action resulting from this decision, e.g. STAY_SILENT_MONITOR, DISPATCH_MINIMAL_CLARIFICATION, EXECUTE_WITHIN_BOUNDS, REQUEST_USER_ACTION, PARK_UNRESOLVED.',
         },
+        // Optional evidence fields for Q2
+        triggering_input: {
+          type: 'string',
+          description: 'Raw input that triggered this decision (event summary).',
+        },
+        transaction_id: {
+          type: 'string',
+          description: 'ID of the transaction being evaluated.',
+        },
+        connector_used: {
+          type: 'string',
+          description: 'Connector used for this decision (e.g., GNANI_STT, PINE_LABS).',
+        },
+        exact_user_message: {
+          type: 'string',
+          description: 'Exact message text sent to the user, if any.',
+        },
       },
       required: ['state', 'decision_type', 'source', 'decision', 'rule_id', 'resulting_action'],
     },
@@ -108,6 +125,15 @@ export const MONEYMIC_TOOLS = [
         policy_tag: {
           type: 'string',
           description: 'Tag, e.g. VERIFIED_DINING, VERIFIED_P2P_NON_DINING.',
+        },
+        // Optional evidence fields (Q4)
+        memory_source: {
+          type: 'string',
+          description: 'Origin of this memory entry, e.g. USER_VOICE_GNANI, VERIFIED_METADATA, OPERATOR_FIXTURE.',
+        },
+        transaction_id: {
+          type: 'string',
+          description: 'Transaction ID that triggered the memory entry.',
         },
       },
       required: ['payee_key', 'resolved_category', 'information_status', 'confidence', 'notes', 'policy_tag'],
@@ -350,8 +376,8 @@ Every transaction must be processed through the authoritative server-side state 
 - State 8 (User Response):
   * When Aarav supplies a voice note, call 'gnani_transcribe' with audio_asset_id to receive verbatim Gnani transcript.
   * Inspect transcript independently:
-    If verified as dining: call 'update_transaction_context' (category: 'Dining', category_status: 'VERIFIED', purpose_status: 'VERIFIED') and commit memory via 'update_financial_memory' (payee_key: 'ROHAN_VARMA', resolved_category: 'Dining', information_status: 'VERIFIED', notes: 'Aarav verified ₹850 was his share of team dinner at Burma Burma').
-    Transition to State 6 (Pace Evaluation) via 'record_decision' (or State 3 to re-understand, then State 4 -> State 6).
+    If verified as dining: call 'update_transaction_context' (category: 'Dining', category_status: 'VERIFIED', purpose_status: 'VERIFIED').
+    Transition to State 6 (Pace Evaluation) via 'record_decision' (rule_id: 'RULE-L3-PACE-REVAL', decision_type: 'PACE_EVALUATION_INITIATED').
     If user remains silent or ambiguous: narrow question once (State 5 retry) or park as UNRESOLVED (State 1).
 - State 6 (Pace Evaluation):
   * Call 'evaluate_spending_pace' to recompute server-authoritative financial state.
@@ -362,9 +388,12 @@ Every transaction must be processed through the authoritative server-side state 
     - INSUFFICIENT_DATA (elapsed days < 1)
   * Transition to State 7 (Decision) via 'record_decision'.
 - State 7 (Decision):
-  * If ALIGNED: agent normally remains silent and returns to Monitoring (State 1) via 'record_decision' (rule_id: 'RULE-L3-ALIGNED-SILENT', decision_type: 'PACE_ALIGNED_PASSIVE', resulting_action: 'STAY_SILENT_MONITOR').
-  * If DRIFT: Gemini may warn the user via 'send_user_notification(notification_type: PACE_WARNING)' when drift is meaningful enough to justify interruption, then transition to State 1 via 'record_decision'.
-  * If MATERIAL_DRIFT: Gemini warns user of material drift and enforces delegated bounds (transactions > ₹500 require user confirmation), then returns to State 1 via 'record_decision'.
+  * If ALIGNED: agent normally remains silent. When context is verified from clarification, transition to State 11 (Contextual Memory) via 'record_decision' (rule_id: 'RULE-MEM-VERIFIED-06', decision_type: 'VERIFIED_MEMORY_COMMITTED', resulting_action: 'COMMIT_VERIFIED_MEMORY') to persist payee context, or return directly to State 1 (Monitoring).
+  * If DRIFT: Gemini may warn the user via 'send_user_notification(notification_type: PACE_WARNING)' when drift is meaningful enough to justify interruption. When verified payee context exists, transition to State 11 (Contextual Memory) via 'record_decision' to commit memory, or transition to State 1 via 'record_decision'.
+  * If MATERIAL_DRIFT: Gemini warns user of material drift and enforces delegated bounds (transactions > ₹500 require user confirmation). When verified context exists, transition to State 11 via 'record_decision', then return to State 1.
+- State 11 (Contextual Memory):
+  * Call 'update_financial_memory' with verified payee details (payee_key: 'ROHAN_VARMA', resolved_category: 'Dining', information_status: 'VERIFIED', notes: 'Aarav verified ₹850 was his share of team dinner at Burma Burma').
+  * After committing verified context to memory in State 11, immediately transition back to State 1 (Monitoring) via 'record_decision' (rule_id: 'RULE-L3-RETURN-MONITOR', decision_type: 'MONITORING_RESUMED', resulting_action: 'STAY_SILENT_MONITOR') to passively await future events.
 
 3. MEMORY AS EVIDENCE:
 - Preserved verified contextual memory (e.g. ROHAN_VARMA -> Dining share) is evidence.
@@ -483,7 +512,19 @@ The server strictly enforces permitted transitions. Gemini selects valid transit
 
     switch (name) {
       case 'record_decision': {
-        const { state: targetState, decision_type, source, decision, rule_id, resulting_action } = args;
+        const {
+          state: targetState,
+          decision_type,
+          source,
+          decision,
+          rule_id,
+          resulting_action,
+          // Optional Q2 evidence fields
+          triggering_input,
+          transaction_id,
+          connector_used,
+          exact_user_message,
+        } = args;
 
         const transitionResult = simulationStore.validateAndSetState(
           targetState as SimulationStateNum,
@@ -506,6 +547,11 @@ The server strictly enforces permitted transitions. Gemini selects valid transit
           decision: decision || '',
           ruleId: rule_id || 'RULE-L3-DEFAULT',
           action: resulting_action || 'PROCEED',
+          // Capture optional evidence fields
+          triggeringInput: triggering_input,
+          transactionId: transaction_id,
+          connectorUsed: connector_used,
+          exactUserMessage: exact_user_message,
         });
 
         return {
@@ -590,7 +636,7 @@ The server strictly enforces permitted transitions. Gemini selects valid transit
       }
 
       case 'update_financial_memory': {
-        const { payee_key, resolved_category, information_status, confidence, notes, policy_tag } = args;
+        const { payee_key, resolved_category, information_status, confidence, notes, policy_tag, memory_source, transaction_id } = args;
 
         // Information status discipline: only VERIFIED or explicitly confirmed context can be committed
         const status: InformationStatus = information_status === 'CONFLICTED' ? 'CONFLICTED' : 'VERIFIED';
@@ -604,6 +650,8 @@ The server strictly enforces permitted transitions. Gemini selects valid transit
           notes: notes || '',
           learnedAt: new Date().toISOString(),
           policyTag: policy_tag || 'VERIFIED_CONTEXT',
+          memorySource: memory_source,
+          transactionId: transaction_id,
         });
 
         return {

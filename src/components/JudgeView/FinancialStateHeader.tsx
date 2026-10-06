@@ -46,33 +46,34 @@ export const FinancialStateHeader: React.FC<FinancialStateHeaderProps> = ({
 
   const getPaceBadge = (classification: PaceClassification) => {
     switch (classification) {
-      case 'UNDER_PACED':
+      case 'ALIGNED':
         return {
           bg: 'bg-emerald-500/10 border-emerald-500/30 text-emerald-400',
           dot: 'bg-emerald-400',
-          label: 'UNDER PACED',
-          icon: ShieldCheck,
-        };
-      case 'ON_TRACK':
-        return {
-          bg: 'bg-cyan-500/10 border-cyan-500/30 text-cyan-300',
-          dot: 'bg-cyan-400',
-          label: 'ON TRACK',
+          label: 'ALIGNED',
           icon: CheckCircle,
         };
-      case 'AT_RISK':
+      case 'DRIFT':
         return {
           bg: 'bg-amber-500/10 border-amber-500/30 text-amber-400',
           dot: 'bg-amber-400',
-          label: 'AT RISK',
+          label: 'SPENDING DRIFT',
           icon: AlertTriangle,
         };
-      case 'CRITICAL_OVERPACE':
+      case 'MATERIAL_DRIFT':
         return {
           bg: 'bg-rose-500/15 border-rose-500/40 text-rose-400 animate-pulse',
           dot: 'bg-rose-400',
-          label: 'CRITICAL OVERPACE',
+          label: 'MATERIAL DRIFT',
           icon: AlertTriangle,
+        };
+      case 'INSUFFICIENT_DATA':
+      default:
+        return {
+          bg: 'bg-slate-500/10 border-slate-500/30 text-slate-400',
+          dot: 'bg-slate-400',
+          label: 'INSUFFICIENT DATA',
+          icon: ShieldCheck,
         };
     }
   };

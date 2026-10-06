@@ -63,14 +63,14 @@ export const STATE_DEFINITIONS: Record<SimulationStateNum, StateDefinition> = {
     code: 'DECISION',
     name: 'Decision',
     description: 'Applying L3 bounded autonomy rules: Stay Silent, Warn User, Intervene within Authority, or Request Explicit Action.',
-    allowedTransitions: [1, 8, 9], // S7 -> S1 silent, S8 user response/action, S9 execution
+    allowedTransitions: [1, 8, 9, 11], // S7 -> S1 silent, S8 user response/action, S9 execution, S11 contextual memory
   },
   8: {
     id: 8,
     code: 'USER_RESPONSE',
     name: 'User Response',
     description: 'Handling user voice clarification via Gnani or confirmation. Silence or ambiguity parks transaction as UNRESOLVED.',
-    allowedTransitions: [3, 6, 9, 1], // S8 -> S3 re-understand, S6 pace re-eval, S9 execution, S1 park unresolvable
+    allowedTransitions: [3, 6, 9, 11, 1], // S8 -> S3 re-understand, S6 pace re-eval, S9 execution, S11 contextual memory, S1 park
   },
   9: {
     id: 9,
@@ -163,6 +163,11 @@ export interface DecisionLogEntry {
   decision: string;
   ruleId: string;
   action: string;
+  // Q2 evidence fields
+  triggeringInput?: string;      // What triggered this decision (raw event summary)
+  transactionId?: string;        // Which transaction was being evaluated
+  connectorUsed?: string;        // Which connector was used (GNANI_STT / PINE_LABS / etc.)
+  exactUserMessage?: string;     // Exact wording of any user-facing message dispatched
 }
 
 export interface ConnectorLogEntry {
@@ -248,6 +253,11 @@ export interface ContextualMemoryItem {
   notes: string;
   learnedAt: string;
   policyTag: string;
+  // Memory audit trail (Q4)
+  memorySource?: string;           // e.g. 'USER_VOICE_GNANI' | 'VERIFIED_METADATA' | 'OPERATOR_FIXTURE'
+  transactionId?: string;          // Transaction that caused this memory to be written
+  replacedPreviousEntry?: boolean; // True if this overwrote an existing memory for the same key
+  conflictDetail?: string;         // If CONFLICTED, description of what conflicted
 }
 
 export interface SimulationState {
@@ -255,7 +265,13 @@ export interface SimulationState {
   financialIntent: FinancialIntent;
   permissions: AgentPermissions;
   currentState: SimulationStateNum;
-  stateHistory: { state: SimulationStateNum; timestamp: string; reason: string }[];
+  stateHistory: {
+    state: SimulationStateNum;
+    timestamp: string;
+    reason: string;
+    previousState?: SimulationStateNum;       // Q3: where we transitioned FROM
+    transitionSource?: 'GEMINI_DECISION' | 'SERVER_ENFORCED' | 'OPERATOR_RESET' | 'EXTERNAL_EVENT'; // Q3: who drove the transition
+  }[];
   transactions: Transaction[];
   unresolvedTransactions: Transaction[];
   contextualMemory: Record<string, ContextualMemoryItem>;

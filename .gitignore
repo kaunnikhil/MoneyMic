@@ -6,3 +6,6 @@ coverage/
 *.log
 .env*
 !.env.example
+*.mp4
+dev_output.txt
+lint_output.txt

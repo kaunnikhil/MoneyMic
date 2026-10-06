@@ -12,6 +12,7 @@ import {
   PaymentAction,
   ContextualMemoryItem,
   OperatorAudioAsset,
+  SpendingPaceCalculation,
 } from '../src/types/simulation';
 import {
   getInitialSimulationState,
@@ -59,6 +60,7 @@ export class SimulationStoreManager {
       state: targetState,
       timestamp: new Date().toISOString(),
       reason: `Scenario Reset by operator to State ${targetState} [${STATE_DEFINITIONS[targetState].name}].`,
+      transitionSource: 'OPERATOR_RESET',
     });
     this.simulationState.lastUpdated = new Date().toISOString();
     return this.getSimulationState();
@@ -75,6 +77,7 @@ export class SimulationStoreManager {
         state: 0,
         timestamp: new Date().toISOString(),
         reason: 'State 0 Setup: MoneyMic simulation started for Aarav (October 2026, ₹2,000 Dining Intention, L3 Bounded Autonomy).',
+        transitionSource: 'OPERATOR_RESET',
       },
     ];
     this.simulationState.lastUpdated = new Date().toISOString();
@@ -83,7 +86,8 @@ export class SimulationStoreManager {
 
   public validateAndSetState(
     nextState: SimulationStateNum,
-    reason: string
+    reason: string,
+    transitionSource: 'GEMINI_DECISION' | 'SERVER_ENFORCED' | 'OPERATOR_RESET' | 'EXTERNAL_EVENT' = 'GEMINI_DECISION'
   ): { success: boolean; error?: string; currentState: SimulationStateNum; allowedTransitions: SimulationStateNum[] } {
     const currentState = this.simulationState.currentState;
 
@@ -151,6 +155,8 @@ export class SimulationStoreManager {
       state: nextState,
       timestamp: new Date().toISOString(),
       reason,
+      previousState: currentState,
+      transitionSource,
     });
     this.simulationState.lastUpdated = new Date().toISOString();
 
@@ -173,6 +179,11 @@ export class SimulationStoreManager {
       decision: entry.decision,
       ruleId: entry.ruleId,
       action: entry.action,
+      // Q2 evidence fields
+      triggeringInput: entry.triggeringInput,
+      transactionId: entry.transactionId,
+      connectorUsed: entry.connectorUsed,
+      exactUserMessage: entry.exactUserMessage,
     };
 
     this.simulationState.decisionLog.unshift(fullEntry);
@@ -303,7 +314,13 @@ export class SimulationStoreManager {
   }
 
   public addContextualMemory(item: ContextualMemoryItem): void {
-    this.simulationState.contextualMemory[item.key] = item;
+    const existingEntry = this.simulationState.contextualMemory[item.key];
+    // Set the replacedPreviousEntry flag based on whether an existing entry is being overwritten
+    const enrichedItem: ContextualMemoryItem = {
+      ...item,
+      replacedPreviousEntry: Boolean(existingEntry),
+    };
+    this.simulationState.contextualMemory[item.key] = enrichedItem;
     this.simulationState.lastUpdated = new Date().toISOString();
   }
 

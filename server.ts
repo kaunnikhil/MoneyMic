@@ -13,7 +13,7 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 const app = express();
-const port = 3000;
+const port = Number(process.env.PORT) || 3002;
 
 // Body parsers
 app.use(express.json({ limit: '50mb' }));
@@ -132,7 +132,8 @@ app.post('/api/operator/inject-event', async (req, res) => {
   if (currentState === 1) {
     simulationStore.validateAndSetState(
       2,
-      `Outside-world event arrived: Ingesting transaction ${txn.id} [${txn.payee} - ₹${txn.amount}]`
+      `Outside-world event arrived: Ingesting transaction ${txn.id} [${txn.payee} - ₹${txn.amount}]`,
+      'EXTERNAL_EVENT'
     );
   }
 
@@ -192,7 +193,8 @@ app.post('/api/operator/respond-user', async (req, res) => {
   // Transition to State 8 (User Response)
   simulationStore.validateAndSetState(
     8,
-    `User responded with ${responseType}${audioAssetId ? ` [Voice Asset: ${audioAssetId}]` : ''}`
+    `User responded with ${responseType}${audioAssetId ? ` [Voice Asset: ${audioAssetId}]` : ''}`,
+    'SERVER_ENFORCED'
   );
 
   let agentResult = null;
@@ -206,11 +208,10 @@ You are now in State 8 (User Response).
 An audio asset has been supplied. Independently decide your next actions based on your context-confidence rules.
 If you call 'gnani_transcribe', the exact STT result will be returned to you without server paraphrasing or alteration.
 After receiving the transcript, independently interpret whether the information is sufficient to resolve the transaction.
-If sufficient, transition to the appropriate next state and call 'update_financial_memory' only if the context is verified.
-If insufficient, you may ask for one narrower clarification and then park the transaction as UNRESOLVED if necessary.
-At the end of this test, stop. Do not automatically continue into pace evaluation, payment execution or Delhivery.`;
+If sufficient, continue naturally according to the MoneyMic state machine: update transaction context via 'update_transaction_context', evaluate spending pace via 'evaluate_spending_pace' (State 6), record decisions via 'record_decision' (State 7), commit verified memory via 'update_financial_memory' (State 11), and return to monitoring (State 1).
+If insufficient, you may ask for one narrower clarification (State 5 retry) or park the transaction as UNRESOLVED (State 1).`;
 
-    agentResult = await agentEngine.runAgentLoop(triggerPrompt, 6);
+    agentResult = await agentEngine.runAgentLoop(triggerPrompt, 8);
   }
 
   res.setHeader('Content-Type', 'application/json');
